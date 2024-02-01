@@ -1,1 +1,94 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+data = read.csv("/Users/srikanthgembali/Downloads/car data.csv")
+head(data)
+```
+**Data source - https://www.kaggle.com/datasets/nehalbirla/vehicle-dataset-from-cardekho?resource=download&select=car+data.csv**
+
+```{r}
+summary(data) #Data Summary
+```
+
+```{r}
+str(data) #Data Structure
+```
+```{r}
+#Average Selling Price (in thousands)
+
+avg_selling_price = mean(data$Selling_Price)
+avg_selling_price
+```
+
+```{r}
+#Range of KMS driven
+
+kms_driven_range = range(data$Kms_Driven)
+kms_driven_range
+```
+
+```{r}
+#Fuel Types
+
+data$Fuel_Type = as.factor(data$Fuel_Type)
+
+types = levels(data$Fuel_Type)
+types
+```
+
+```{r}
+#Seller Types
+
+data$Seller_Type = as.factor(data$Seller_Type)
+
+seller_types = levels(data$Seller_Type)
+seller_types
+```
+
+```{r}
+class(data$Transmission)
+```
+
+**Transformation**
+
+```{r}
+class_kms_driven = data$Kms_Driven
+class(class_kms_driven)
+```
+
+```{r}
+transform_kms_driven = as.numeric(class_kms_driven)
+class(transform_kms_driven)
+```
+
+```{r}
+#Histogram
+
+hist(data$Present_Price, n=20,
+     main = "Histogram of Present Price",
+     col = "skyblue",
+     xlab = "Present Price")
+```
+
+```{r}
+#Scatterplot
+
+plot(data$Kms_Driven, data$Selling_Price,
+     main = "Scatterplot of Selling Price vs Kms driven",
+     col = "red",
+     xlab = "Selling Price",
+     ylab = "Kms driven")
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(data, aes(x = Fuel_Type, y = Selling_Price)) +
+  geom_bar(stat = "summary", fill = "maroon", color = "black", width = 0.7) +
+  labs(title = "Selling Price by Fuel Type", x = "Fuel Type", y = "Selling Price")
+```
 

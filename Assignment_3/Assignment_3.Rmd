@@ -1,1 +1,143 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+library(class)
+library(caret)
+library(dplyr)
+library(e1071)
+```
 
+```{r}
+data = read.csv("/Users/srikanthgembali/Downloads/UniversalBank.csv")
+head(data)
+```
+
+```{r}
+dim(data)
+```
+
+```{r}
+# Partition the data into training (60%) and validation (40%) sets
+set.seed(123)
+trainIndex <- createDataPartition(data$Personal.Loan, p = 0.6, list = FALSE)
+trainData <- data[trainIndex, ]
+validationData <- data[-trainIndex, ]
+```
+
+```{r}
+dim(trainData)
+dim(validationData)
+```
+
+A. Create a pivot table for the training data with Online as a column variable, CC as a row variable, and Loan as a secondary row variable.
+
+```{r}
+library(pander)
+subset = trainData[c("CreditCard","Personal.Loan","Online")]
+pivot_table = ftable(subset)
+pandoc.table(pivot_table,style = "grid", split.tables = Inf)
+```
+B. Consider the task of classifying a customer who owns a bank credit card and is actively using online banking services. Looking at the pivot table, what is the probability that this customer will accept the loan offer? [This is the probability of loan acceptance (Loan = 1) conditional on having a bank credit card (CC = 1) and being an active user of online banking services (Online = 1)]
+
+```{r}
+probability = 57/532
+cat("Prob (Loan = 1 | CC = 1, Online = 1):", round(probability*100,2),"%")
+```
+
+C. Create two separate pivot tables for the training data. One will have Loan (rows) as a function of Online (columns) and the other will have Loan (rows) as a function of CC.
+
+```{r}
+online_subset = trainData[c("Personal.Loan","Online")]
+pivot_online = ftable(online_subset)
+pandoc.table(pivot_online,style = "grid", split.tables = Inf)
+```
+```{r}
+cc_subset = trainData[c("Personal.Loan","CreditCard")]
+pivot_cc = ftable(cc_subset)
+pandoc.table(pivot_cc,style = "grid", split.tables = Inf)
+```
+
+D. Compute the following quantities [P(A | B) means “the probability ofA given B”]:
+
+i. P(CC = 1 | Loan = 1) (the proportion of credit card holders among the loan acceptors)
+
+```{r}
+cc_loan1 <- pivot_cc[2,2]  # Number of credit card holders among loan acceptors
+loan1 <- sum(pivot_cc[2,])  # Total number of loan acceptors
+CC_given_loan1 <- cc_loan1 / loan1
+cat("Prob (CC = 1 | Loan = 1):", round(CC_given_loan1*100,2),"%")
+```
+
+ii. P(Online = 1 | Loan = 1)
+
+```{r}
+online_loan1 <- pivot_online[2,2]  # Number of online banking users among loan acceptors
+loan2 <- sum(pivot_online[2,])  # Total number of loan acceptors
+online_given_loan1 <- online_loan1 / loan2
+cat("Prob (Online = 1 | Loan = 1):", round(online_given_loan1*100,2),"%")
+```
+
+iii. P(Loan = 1) (the proportion of loan acceptors)
+
+```{r}
+loan_acceptors <- sum(trainData$Personal.Loan == 1)
+total <- nrow(trainData)
+loan_acceptors1 <- loan_acceptors/total
+cat("Prob (Loan = 1):", round(loan_acceptors1*100,2),"%")
+```
+
+iv. P(CC = 1 | Loan = 0)
+
+```{r}
+cc_loan2 <- pivot_cc[1,2] # Number of credit card users among non-loan acceptors
+loan3 <- sum(pivot_cc[1,]) # Total number of non-loan acceptors
+CC_notgiven_loan <- cc_loan2 / loan3
+cat("Prob (CC = 1 | Loan = 0):", round(CC_notgiven_loan*100,2),"%")
+```
+
+v. P(Online = 1 | Loan = 0)
+
+```{r}
+online_loan2 <- pivot_online[1,2]  # Number of online banking users among non-loan acceptors
+loan4 <- sum(pivot_online[1,])  # Total number of non-loan acceptors
+online_notgiven_loan <- online_loan2 / loan4
+cat("Prob (Online = 1 | Loan = 0):", round(online_notgiven_loan*100,2),"%")
+```
+
+vi. P(Loan = 0)
+
+```{r}
+nonloan_acceptors <- 1 - loan_acceptors1
+cat("Prob (Loan = 0):", round(nonloan_acceptors*100,2),"%")
+```
+
+
+E. Use the quantities computed above to compute the Naive Bayes probability P(Loan = 1 | CC = 1, Online = 1).
+
+```{r}
+nb_prob <- ((CC_given_loan1*online_given_loan1*loan_acceptors1)/((CC_given_loan1*online_given_loan1*loan_acceptors1)+(CC_notgiven_loan*online_notgiven_loan*nonloan_acceptors)))
+cat("Prob (Loan = 1 | CC = 1, Online = 1):", round(nb_prob*100,2),"%")
+```
+
+F. Compare this value with the one obtained from the pivot table in (B). Which is a more accurate estimate?
+
+10.71% (in B) is almost similar to the Naive Bayes probability 11.06%. This method requires same independent variables to make predictions and also limited by the exact classification of the independent variables, where as the Naive Bayes does not require as it can be more flexible with its predictions, but also may be less precise due to simplifying assumptions of independence among features.
+
+
+G. Which of the entries in this table are needed for computing P(Loan = 1 | CC = 1, Online = 1)? Run naive Bayes on the data. Examine the model output on training data, and find the entry that corresponds to P(Loan = 1 | CC = 1, Online = 1). Compare this to the number you obtained in (E).
+
+```{r}
+# 3 entries are required to compute P(Loan = 1 | CC = 1, Online = 1) which are included in subset function.
+model <- naiveBayes(Personal.Loan ~ ., data = subset)
+model
+```
+
+```{r}
+result <- (0.327 * 0.643 * 0.092) / ((0.327 * 0.643 * 0.092) + (0.290 * 0.595 * 0.907))
+cat("Prob (Loan = 1 | CC = 1, Online = 1):", round(result*100),"%")
+```
+
+The output calculated from the model is 11%, which is similar to the output obtained in E i.e 11.6%

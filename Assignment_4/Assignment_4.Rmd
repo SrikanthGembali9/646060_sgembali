@@ -1,1 +1,140 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+library(readr)
+library(tidyverse)
+library(caret)
+library(knitr)
+library(class)  
+library(ggplot2)
+library(ggcorrplot)
+library(dplyr)
+library(e1071)
+library(reshape2)
+library(factoextra)
+library(cluster)
+library(cowplot)
+library(pander)
+library(kernlab)
+library(tidyr)
+library(gridExtra)
+```
+
+```{r}
+data = read.csv("/Users/srikanthgembali/Downloads/Pharmaceuticals.csv")
+head(data)
+```
+
+```{r}
+str(data)
+```
+
+a. Use only the numerical variables (1 to 9) to cluster the 21 firms. Justify the various choices made in conducting the cluster analysis, such as weights for different variables, the specific clustering algorithm(s) used, the number of clusters formed, and so on.
+
+```{r}
+set.seed(123)
+a = data[, 3:11] #dropping remaining columns
+scale_a = scale(a) #standardize the data
+head(scale_a)
+```
+```{r}
+# Finding optimal number of clusters using Elbow method and Silhouette method
+
+Elbow = fviz_nbclust(scale_a, kmeans, method = "wss")
+plot(Elbow)
+```
+
+```{r}
+silhouette = fviz_nbclust(scale_a, kmeans, method = "silhouette")
+plot(silhouette)
+```
+
+Elbow method show that best K = 2, whereas Silhouette method show best K = 5. We can plot all clusters from 2 to 5 to check which cluster is not overlapping
+
+```{r}
+k2 = kmeans(scale_a,centers = 2,nstart=25)
+k3 = kmeans(scale_a,centers = 3,nstart=25)
+k4 = kmeans(scale_a,centers = 4,nstart=25)
+k5 = kmeans(scale_a,centers = 5,nstart=25)
+
+p1 = fviz_cluster(k2,geom = "point", data=scale_a)+ggtitle("k=2")
+p2 = fviz_cluster(k3,geom = "point", data=scale_a)+ggtitle("k=3")
+p3 = fviz_cluster(k4,geom = "point", data=scale_a)+ggtitle("k=4")
+p4 = fviz_cluster(k5,geom = "point", data=scale_a)+ggtitle("k=5")
+
+grid.arrange(p1,p2,p3,p4)
+```
+
+We can consider best k = 5, as the cluster are not overlapping by considering all the firms.
+
+b. Interpret the clusters with respect to the numerical variables used in forming the clusters.
+
+```{r}
+k = 5 
+b = kmeans(scale_a, centers = k)
+cluster_membership = b$cluster
+data$Cluster = cluster_membership
+centroids = b$centers
+print(centroids)
+```
+
+```{r}
+group_b = data[, c("Name", "Cluster")]
+group_b
+```
+```{r}
+grouped_data <- group_b %>% group_by(Cluster) %>% 
+  summarise(Names = paste(Name, collapse = ", "))
+grouped_data
+```
+
+c. Is there a pattern in the clusters with respect to the numerical variables (10 to 12)? (those not used in forming the clusters)
+
+```{r}
+c = data %>% select(c(12,13,14)) %>% mutate(Cluster = b$cluster)
+c
+```
+
+```{r}
+library(cowplot)
+
+Median_Recom <- ggplot(data, mapping = aes(factor(Cluster), fill=Median_Recommendation)) + geom_bar(position = 'dodge') + labs(x='Clusters', y='Frequency')
+
+Location <- ggplot(data, mapping = aes(factor(Cluster), fill=Location)) + geom_bar(position = 'dodge') + labs(x='Clusters', y='Frequency')
+
+Exchange <- ggplot(data, mapping = aes(factor(Cluster), fill=Exchange)) + geom_bar(position = 'dodge') + labs(x='Clusters', y='Frequency')
+
+plot_grid(Median_Recom, Location, Exchange)
+```
+
+Cluster 1 has a combination of US and UK firms listed in NYSE, and they have Moderate buy and hold indicating that it has potential for appreciation or growth, but with some cause or reservations.
+
+Cluster 2 has mix of US, UK and France firms listed on NYSE, and they have Moderate Buy, Moderate sell and Strong Buy indicating varying levels of analyst confidence and market sentiment towards these securities.
+
+Cluster 3 has companies from US, Canada and Germany listed on NYSE, and they have high Hold than Moderate Buy suggesting that analysts or financial institutions may view these stocks as having relatively stable performance potential in the near term, but with less optimism for significant appreciation in value.
+
+Cluster 4 has many companies from US, mix from UK and Switzerland listed on NYSE and they have high hold, better Moderate Sell and lower Moderate Buy that may suggest a prevailing sentiment among analysts or institutions that these stocks are currently overvalued or facing potential headwinds in the near term.
+
+Cluster 5 has firms from US and Germany listed on all exchanges NYSE, NASDAQ and AMEX and they have high Moderate but and Moderate Sell suggesting a mixed sentiment among analysts regarding the performance and prospects of these firms.
+
+
+d. Provide an appropriate name for each cluster using any or all of the variables in the dataset.
+
+Cluster 1: "Transatlantic Growth Prospects"
+Cluster 1 comprises a blend of firms from both the United States and the United Kingdom, listed on the New York Stock Exchange (NYSE). Analysts have assigned a mixture of 'Moderate Buy' and 'Hold' recommendations to these securities, reflecting a cautious yet optimistic outlook for potential appreciation or growth.
+
+Cluster 2: "Cross-Continental Market Sentiment"
+Cluster 2 showcases a diverse mix of companies from the US, UK, and France, all listed on the NYSE. Analyst recommendations within this cluster range from 'Moderate Buy' to 'Moderate Sell' and 'Strong Buy,' indicating varying levels of analyst confidence and market sentiment towards these securities.
+
+Cluster 3: "Stable Performers Across Borders"
+Cluster 3 features companies hailing from the US, Canada, and Germany, listed primarily on the NYSE. Analysts have issued a higher proportion of 'Hold' recommendations compared to 'Moderate Buy,' suggesting a perception of relative stability in performance potential for these stocks in the short term, albeit with less anticipation for significant value appreciation.
+
+Cluster 4: "Valuation Concerns Amidst Global Presence"
+Cluster 4 comprises a substantial number of companies from the US, alongside a mix from the UK and Switzerland, all listed on the NYSE. Notably, analyst recommendations lean towards 'Hold,' with a slightly more favorable disposition towards 'Moderate Sell' than 'Moderate Buy.' This pattern suggests prevailing concerns among analysts or institutions regarding overvaluation or potential headwinds in the near term.
+
+Cluster 5: "Mixed Signals in Global Markets"
+Cluster 5 is characterized by firms originating from the US and Germany, with listings across all major exchanges including the NYSE, NASDAQ, and AMEX. Analyst sentiment within this cluster reflects a blend of 'High Moderate Buy' and 'Moderate Sell,' indicating a divergence of opinion regarding the performance and prospects of these companies amidst global market dynamics.
 

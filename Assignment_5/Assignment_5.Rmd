@@ -1,1 +1,266 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+library(readr)
+library(tidyverse)
+library(caret)
+library(knitr)
+library(class)  
+library(ggplot2)
+library(ggcorrplot)
+library(dplyr)
+library(e1071)
+library(reshape2)
+library(caret)
+library(factoextra)
+library(cluster)
+library(cowplot)
+library(pander)
+library(kernlab)
+library(tidyr)
+library(fastDummies)
+library(FactoMineR)
+```
+
+```{r}
+data = read.csv("/Users/srikanthgembali/Downloads/Cereals.csv")
+head(data)
+```
+
+```{r}
+summary(data)
+```
+
+```{r}
+#removing missing values
+
+cereals_data = na.omit(data)
+summary(cereals_data)
+```
+
+```{r}
+cereals_data = as.data.frame(cereals_data)
+cereals_data = cereals_data[, c(4:12,14:16)] #selecting only numerical values
+cereals_data = scale(cereals_data)
+head(cereals_data)
+```
+
+```{r}
+dim(cereals_data)
+```
+
+1. Apply hierarchical clustering to the data using Euclidean distance to the normalized measurements.
+
+```{r}
+distance_table <- get_dist(cereals_data)
+fviz_dist(distance_table)
+```
+As we can see, the diagonal values are zeros (dark orange) because they represent the distance between each point and itself. The purple and blue colors represent the furthest distance between any pair of observations.
+
+```{r}
+corr <- cor(cereals_data)
+ggcorrplot(corr, lab = TRUE, hc.order = TRUE, type = "full")
+```
+calories, sugar and fats are highly negatively correlated with rating, while Potass is highly positively correlated with fiber and protein.
+
+```{r}
+#Trying to Understand the variable variance by performing PCA
+
+pca_cereal <- PCA(cereals_data)
+var <- get_pca_var(pca_cereal)
+fviz_pca_var(pca_cereal, col.var="contrib",
+gradient.cols = c("grey","yellow","purple","red","blue"),ggrepel = TRUE ) + labs( title = "PCA Variable Variance")
+```
+From PCA Variable Variance, we can infer that sugar, calories, protein, potass, and fiber contribute more to the two PCA components/dimensions (variables).
+
+```{r}
+Elbow_method = fviz_nbclust(cereals_data, kmeans, method = "wss")
+Silhouette = fviz_nbclust(cereals_data, kmeans, method = "silhouette")
+plot_grid(Elbow_method, Silhouette, nrow = 1)
+```
+
+Optimal number of clusters, K = 10.
+
+```{r}
+set.seed(123)
+k10 = kmeans(cereals_data, centers = 10, nstart = 25)
+fviz_cluster(k10, data = cereals_data)
+```
+After applying both the silhouette method and elbow method, we obtained a K value of 10, which we used to plot the 10 clusters. However, upon observing the plot, we noticed that some clusters were overlapping, indicating that using only K-means clustering may not be the best option for optimization. Therefore, we will apply hierarchical clustering to determine an optimal number of clusters.
+
+
+Use Agnes to compare the clustering from single linkage, complete linkage, average linkage, and Ward. Choose the best method
+
+```{r}
+hc_single = agnes(distance_table, method = "single")
+hc_complete = agnes(distance_table, method = "complete")
+hc_average = agnes(distance_table, method = "average")
+hc_ward = agnes(distance_table, method = "ward")
+
+print(hc_single$ac)
+print(hc_complete$ac)
+print(hc_average$ac)
+print(hc_ward$ac)
+```
+The best agglomerative (AGNES) linkage to use is the Ward linkage, which gives 90.87% accuracy.
+
+
+2. How many clusters would you choose?
+
+```{r}
+#Utilizing the Ward linkage, 5 clusters seem to be a good number to group the data
+fviz_dend(hc_ward, k = 5, main = "Dendrogram of AGNES (Ward)",cex = 0.5, k_colors = c("skyblue", "purple", "darkgreen", "darkorange", "darkred"), color_labels_by_k = TRUE,labels_track_height = 16,ggtheme = theme_bw())
+cereals_data_2 = cutree(hc_ward, k = 5)
+clustered_df = as.data.frame(cbind (cereals_data, cereals_data_2))
+```
+
+3. Comment on the structure of the clusters and on their stability. Hint: To check stability, partition the data and see how well clusters formed based on one part apply to the other part.
+
+Cluster partition A
+
+```{r}
+#We will partition the data into two groups
+A = cereals_data [1:50,]
+summary(A)
+
+B = cereals_data [51:74,]
+summary(B)
+```
+
+```{r}
+# Computing the distances
+distance_A = get_dist(A)
+
+# Compute with AGNES and with different linkage methods For A data
+hc_single_A = agnes(distance_A, method = "single")
+hc_complete_A = agnes(distance_A, method = "complete")
+hc_average_A = agnes(distance_A, method = "average")
+hc_ward_A = agnes(distance_A, method = "ward")
+
+print(hc_single_A$ac)
+print(hc_complete_A$ac)
+print(hc_average_A$ac)
+print(hc_ward_A$ac)
+```
+The best linkage is Ward with 88.92% accuracy for A
+
+```{r}
+# Computing the distances
+distance_B = get_dist(B)
+
+# Compute with AGNES and with different linkage methods For A data
+hc_single_B = agnes(distance_B, method = "single")
+hc_complete_B = agnes(distance_B, method = "complete")
+hc_average_B = agnes(distance_B, method = "average")
+hc_ward_B = agnes(distance_B, method = "ward")
+
+print(hc_single_B$ac)
+print(hc_complete_B$ac)
+print(hc_average_B$ac)
+print(hc_ward_B$ac)
+```
+The best linkage is Ward with 85.72% accuracy for B
+
+Use the cluster centroids from A to assign each record in partition B (each record is assigned to the cluster with the closest centroid).
+
+```{r}
+Clustered_df_A = cutree (hc_ward_A, k=5)
+Clusters_A = as.data.frame(cbind(A, Clustered_df_A))
+nrow(Clusters_A)
+
+Clust_1 = colMeans (Clusters_A [Clusters_A$ Clustered_df_A == "1" ,])
+
+Clustered_df_B = cutree (hc_ward_B, k=5)
+Clusters_B = as.data.frame(cbind(B, Clustered_df_B))
+nrow(Clusters_B)
+
+Clust_2 = colMeans (Clusters_B [Clusters_B$ Clustered_df_B == "1" ,])
+```
+
+```{r}
+Centroid = rbind(Clust_1, Clust_2)
+Centroid 
+```
+At an overall level, both clusters seem fine, but there is also a slight difference. Cluster_1 has higher fiber, protein and potassium content compared to Cluster_2, which may suggest that cereals in this cluster are healthier or more nutrient-dense. Cluster_2 has a higher sugar content compared to Cluster_1, which may suggest that cereals in this cluster are less healthy or have more added sugars.
+
+
+Assess how consistent the cluster assignments are compared to the assignments based on all the data.
+
+We are comparing the mean values of each feature for the two clusters identified in the data. These centroids can be used to compare the features of the two clusters and explore differences or similarities between them. Here, we observe that Cluster_1 has higher fiber, protein and potassium content compared to Cluster_2, suggesting that cereals in this cluster are healthier or more nutrient-dense. Conversely, Cluster_2 exhibits a higher sugar content compared to Cluster_1, implying that cereals in this cluster are less healthy or contain more added sugars, hence the lower rating of Cluster 2 compared to Cluster 1.
+
+
+4. The elementary public schools would like to choose a set of cereals to include in their daily cafeterias. Every day a different cereal is offered, but all cereals should support a healthy diet. For this goal, you are requested to find a cluster of “healthy cereals.” Should the data be normalized? If not, how should they be used in the cluster analysis?
+
+```{r}
+#To analyze which group of cereals are healthier to distribute daily in cafeterias in elementary public schools, we will use the non-standardized data.
+
+data = na.omit(data)
+
+Healthy_data = as.data.frame(cbind (data, cereals_data_2))
+Healthy_data_sort = Healthy_data[order(Healthy_data$cereals_data_2),c(1,17)]
+Count_cluster = Healthy_data_sort %>% group_by(cereals_data_2) %>% summarise(count = n())
+print(Count_cluster)
+
+#Summary table showing the median of each variable
+Healthy_data_Var = Healthy_data [,4:17]
+cluster_table = Healthy_data_Var %>% group_by(cereals_data_2) %>% summarize(across(.cols = everything(), .fns = median))
+print(cluster_table)
+```
+
+```{r}
+calories = ggplot(cluster_table, aes(x = cereals_data_2, y = calories)) + 
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "Cluster", y = "Calories") +
+  ggtitle("Cluster by Calories")
+
+protein = ggplot(cluster_table, aes(x = cereals_data_2, y = protein)) + 
+  geom_bar(stat = "identity", fill = "red") +
+  labs(x = "Cluster", y = "protein") +
+  ggtitle("Cluster by Protein")
+
+fat = ggplot(cluster_table, aes(x = cereals_data_2, y = fat)) + 
+  geom_bar(stat = "identity", fill = "orange") +
+  labs(x = "Cluster", y = "fat") +
+  ggtitle("Cluster by Fat")
+
+sodium = ggplot(cluster_table, aes(x = cereals_data_2, y = sodium)) + 
+  geom_bar(stat = "identity", fill = "pink") +
+  labs(x = "Cluster", y = "sodium") +
+  ggtitle("Cluster by sodium")
+
+fiber = ggplot(cluster_table, aes(x = cereals_data_2, y = fiber)) + 
+  geom_bar(stat = "identity", fill = "gray") +
+  labs(x = "Cluster", y = "fiber") +
+  ggtitle("Cluster by fiber")
+
+carbo = ggplot(cluster_table, aes(x = cereals_data_2, y = carbo)) + 
+  geom_bar(stat = "identity", fill = "brown") +
+  labs(x = "Cluster", y = "carbo") +
+  ggtitle("Cluster by carbo")
+
+sugars = ggplot(cluster_table, aes(x = cereals_data_2, y = sugars)) + 
+  geom_bar(stat = "identity", fill = "lightgreen") +
+  labs(x = "Cluster", y = "sugars") +
+  ggtitle("Cluster by sugars")
+
+potass = ggplot(cluster_table, aes(x = cereals_data_2, y = potass)) + 
+  geom_bar(stat = "identity", fill = "yellow") +
+  labs(x = "Cluster", y = "potass") +
+  ggtitle("Cluster by potass")
+
+rating = ggplot(cluster_table, aes(x = cereals_data_2, y = rating)) + 
+  geom_bar(stat = "identity", fill = "black") +
+  labs(x = "Cluster", y = "rating") +
+  ggtitle("Cluster by rating")
+
+plot_grid(calories, protein, fat, sodium, fiber, carbo, sugars, potass, rating)
+```
+
+Based on the graphs, we can see that Cluster 1 has the lowest values for calories, fat, and sugars, and the highest values for protein, fiber, and vitamins, which suggests that it may contain cereals that are generally considered healthier options. This is reflected in its very high rating as well. However, Cluster 1 does not satisfy the need for a different cereal per day, as per our client's request. Therefore, we also recommend Cluster 5 to fulfill this requirement. Cluster 5 has zero fats, zero sugars, and the second-lowest number of calories after Cluster 1. Additionally, it boasts a good amount of proteins and fiber.
+
+On the other hand, Cluster 3 exhibits the highest values for calories and sugars, and the lowest values for protein, fiber, and vitamins, suggesting that it may contain cereals that are generally considered less healthy. We observed a similar insight from our correlation plot: higher sugar content correlates with lower ratings, indicating lower healthiness. However, it's important to note that this is just a general observation, and individual cereals within each cluster may vary in terms of their nutritional value.
+
 
